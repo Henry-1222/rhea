@@ -4,48 +4,11 @@ import {
   Scan, Zap, Eye, Terminal, Shield, 
   Radio, Info, ChevronRight, AlertTriangle, Music
 } from 'lucide-react';
-
-// --- Types ---
-
-enum ToolMode {
-  SCANNER = 'SCANNER',
-  CLAW = 'CLAW',
-  FLASHLIGHT = 'FLASHLIGHT',
-  HACKER = 'HACKER'
-}
-
-interface GameState {
-  currentRoom: 'AIRLOCK' | 'COMMUNICATIONS' | 'LABORATORY' | 'CONTAINMENT';
-  currentView: number;
-  inventory: string[];
-  powerRestored: boolean;
-  substationActive: boolean;
-  antennaAligned: boolean;
-  terminalUnlocked: boolean;
-  coreStabilized: boolean;
-  fusesAligned: boolean;
-  cipherSolved: boolean;
-  scannedObjects: Set<string>;
-  messages: { id: string, text: string }[];
-  language: 'EN' | 'ZH';
-}
-
-interface ScannableObject {
-  id: string;
-  name: string;
-  nameZh: string;
-  description: string;
-  descriptionZh: string;
-  translatedText: string;
-  translatedTextZh: string;
-  position: { x: number, y: number };
-  interactable?: boolean;
-  hint?: boolean;
-}
+import { ToolMode } from './constants';
 
 // --- Constants & Data ---
 
-const SCANNABLE_OBJECTS: Record<string, Record<number, ScannableObject[]>> = {
+const SCANNABLE_OBJECTS = {
   AIRLOCK: {
     0: [
       {
@@ -125,6 +88,17 @@ const SCANNABLE_OBJECTS: Record<string, Record<number, ScannableObject[]>> = {
         translatedTextZh: '加密已激活。需要安全密钥。',
         position: { x: 50, y: 45 },
         interactable: true
+      },
+      {
+        id: 'data_log_1',
+        name: 'Data Pad 01',
+        nameZh: '数据平板 01',
+        description: 'A discarded data pad with a blinking light.',
+        descriptionZh: '一个闪烁着灯光的废弃数据平板。',
+        translatedText: 'LOG 01: THE RHEA ANOMALY IS SELF-SUSTAINING.',
+        translatedTextZh: '日志 01：瑞亚异常是自给自足的。',
+        position: { x: 20, y: 70 },
+        interactable: true
       }
     ],
     1: [
@@ -138,6 +112,67 @@ const SCANNABLE_OBJECTS: Record<string, Record<number, ScannableObject[]>> = {
         translatedTextZh: '密钥在于大日食之年：1972。',
         position: { x: 60, y: 30 },
         hint: true
+      },
+      {
+        id: 'gravity_calibration',
+        name: 'Gravity Calibrator',
+        nameZh: '重力校准器',
+        description: 'A device used to stabilize local gravity fields.',
+        descriptionZh: '用于稳定局部重力场的设备。',
+        translatedText: 'GRAVITY FLUCTUATION DETECTED. CALIBRATION REQUIRED.',
+        translatedTextZh: '检测到重力波动。需要校准。',
+        position: { x: 50, y: 60 },
+        interactable: true
+      },
+      {
+        id: 'data_log_2',
+        name: 'Data Pad 02',
+        nameZh: '数据平板 02',
+        description: 'A data pad hidden behind some equipment.',
+        descriptionZh: '隐藏在一些设备后面的数据平板。',
+        translatedText: 'LOG 02: DR. VOLKOV REPORTED STRANGE FLUCTUATIONS.',
+        translatedTextZh: '日志 02：沃尔科夫博士报告了奇怪的波动。',
+        position: { x: 85, y: 80 },
+        interactable: true
+      }
+    ]
+  },
+  REACTOR: {
+    0: [
+      {
+        id: 'laser_alignment_system',
+        name: 'Laser Alignment System',
+        nameZh: '激光对齐系统',
+        description: 'A precision system for guiding energy beams into the core.',
+        descriptionZh: '用于将能量束引导至核心的精密系统。',
+        translatedText: 'BEAM MISALIGNED. CORE TEMPERATURE RISING.',
+        translatedTextZh: '光束未对齐。核心温度正在升高。',
+        position: { x: 50, y: 40 },
+        interactable: true
+      }
+    ],
+    1: [
+      {
+        id: 'reactor_schematics',
+        name: 'Reactor Schematics',
+        nameZh: '反应堆示意图',
+        description: 'Technical drawings of the reactor core.',
+        descriptionZh: '反应堆核心的技术图纸。',
+        translatedText: 'STABILIZATION SEQUENCE: GRAVITY -> LASER -> PRESSURE.',
+        translatedTextZh: '稳定序列：重力 -> 激光 -> 压力。',
+        position: { x: 30, y: 30 },
+        hint: true
+      },
+      {
+        id: 'data_log_3',
+        name: 'Data Pad 03',
+        nameZh: '数据平板 03',
+        description: 'A scorched data pad near the cooling pipes.',
+        descriptionZh: '冷却管附近的一个焦黑的数据平板。',
+        translatedText: 'LOG 03: EMERGENCY! THE CORE IS OVERHEATING.',
+        translatedTextZh: '日志 03：紧急！核心正在过热。',
+        position: { x: 70, y: 60 },
+        interactable: true
       }
     ]
   },
@@ -166,6 +201,17 @@ const SCANNABLE_OBJECTS: Record<string, Record<number, ScannableObject[]>> = {
         translatedTextZh: '如果出现不稳定：顺时针旋转至 360，然后逆时针旋转至 0。',
         position: { x: 50, y: 40 },
         hint: true
+      },
+      {
+        id: 'pressure_calibration',
+        name: 'Pressure Valve',
+        nameZh: '压力阀',
+        description: 'A manual valve for regulating containment pressure.',
+        descriptionZh: '用于调节遏制压力的手动阀门。',
+        translatedText: 'PRESSURE CRITICAL. BALANCE THE LOAD TO PROCEED.',
+        translatedTextZh: '压力临界。平衡负载以继续。',
+        position: { x: 70, y: 70 },
+        interactable: true
       }
     ]
   }
@@ -207,21 +253,39 @@ const UI_STRINGS = {
     msgFuseAligned: 'Fuses aligned. Power flowing.',
     msgCipherSolved: 'Cipher solved. Accessing restricted files.',
     msgAntennaAligned: 'Antenna aligned. Signal restored.',
+    msgGravityCalibrated: 'Gravity calibrated. Local field stabilized.',
+    msgPressureBalanced: 'Pressure balanced. Containment stable.',
+    msgLaserAligned: 'Laser aligned. Reactor core accessible.',
+    msgLogFound: 'Data log decrypted. New information added to database.',
+    msgAccessReactor: 'Security override: Accessing Reactor Core.',
+    gravityCalibration: 'GRAVITY CALIBRATION',
+    stabilizeGravity: 'DRAG SPHERES TO STABILIZE THE FIELD',
+    pressureBalance: 'PRESSURE BALANCE',
+    balanceLoad: 'KEEP THE POINTER IN THE GREEN ZONE',
     walkthroughTitle: 'Classified: Field Manual',
     walkthroughStep1: '1. Activate Substation: In Airlock View 0, toggle switches: Top-Left, Bottom-Right, Center.',
     walkthroughStep2: '2. Align Antenna: In Communications View 0, set frequency to 142.8.',
-    walkthroughStep3: '3. Hack Terminal: In Laboratory View 0, connect all nodes.',
-    walkthroughStep4: '4. Stabilize Core: In Containment View 0, rotate CW to 360, then CCW to 0.',
+    walkthroughStep3: '3. Calibrate Gravity: In Laboratory View 1, drag spheres to targets.',
+    walkthroughStep4: '4. Hack Terminal: In Laboratory View 0, connect all nodes.',
+    walkthroughStep5: '5. Align Laser: In Reactor View 0, rotate mirrors to guide the beam.',
+    walkthroughStep6: '6. Balance Pressure: In Containment View 1, keep pointer in green.',
+    walkthroughStep7: '7. Stabilize Core: In Containment View 0, rotate CW to 360, then CCW to 0.',
+    log1: 'LOG 01: The Rhea base was established to study the "Red Matter" anomaly. Initial tests show it is a self-sustaining energy source, but highly volatile.',
+    log2: 'LOG 02: Dr. Volkov reported strange gravitational fluctuations in the lab. The spheres are drifting without external force.',
+    log3: 'LOG 03: Emergency! The reactor core is overheating. The laser alignment system failed. We are evacuating. If you find this, stabilize the core at all costs.',
+    reactor: 'REACTOR',
+    laserAlignment: 'LASER ALIGNMENT',
+    alignMirrors: 'ROTATE MIRRORS TO GUIDE THE BEAM TO THE RECEIVER',
     credits: 'Credits',
     creditsTitle: 'The Rhea Incident: Red Matter 2',
     creditsLead: 'Lead Developer & Designer',
-    creditsLeadName: 'Kevin AI',
+    creditsLeadName: 'Crea',
     creditsLeadDesc: 'Responsible for full-stack development, UI/UX design, game logic, and multilingual support.',
     creditsTech: 'Tech Stack',
     creditsTechDesc: 'React 19, Tailwind CSS, Framer Motion, Lucide Icons.',
     creditsStory: 'Story & Lore',
     creditsStoryDesc: 'Inspired by the Red Matter 2 universe by Vertical Robot.',
-    creditsPowered: 'Powered by Kevin AI',
+    creditsPowered: 'Powered by Crea',
     back: 'Back',
     rotateFull: 'ROTATE CLOCKWISE TO 360° THEN BACK TO 0°',
     newGame: 'NEW GAME',
@@ -250,6 +314,8 @@ const UI_STRINGS = {
     resetConfirm: 'ARE YOU SURE? THIS WILL WIPE ALL PROGRESS.',
     musicOn: 'MUSIC: ON',
     musicOff: 'MUSIC: OFF',
+    originalDev: 'Original VR Game Developer',
+    fullPlaythrough: '"Red Matter 2" Full Playthrough',
   },
   ZH: {
     suitIntegrity: '宇航服完整性',
@@ -286,21 +352,39 @@ const UI_STRINGS = {
     msgFuseAligned: '保险丝已对齐。电力开始流动。',
     msgCipherSolved: '密码已破解。正在访问受限文件。',
     msgAntennaAligned: '天线已对齐。信号已恢复。',
+    msgGravityCalibrated: '重力已校准。局部场已稳定。',
+    msgPressureBalanced: '压力已平衡。遏制场稳定。',
+    msgLaserAligned: '激光已对齐。反应堆核心可访问。',
+    msgLogFound: '数据日志已解密。新信息已添加到数据库。',
+    msgAccessReactor: '安全覆盖：正在进入反应堆核心。',
+    gravityCalibration: '重力校准',
+    stabilizeGravity: '拖动球体以稳定重力场',
+    pressureBalance: '压力平衡',
+    balanceLoad: '将指针保持在绿色区域',
     walkthroughTitle: '绝密：外勤手册',
     walkthroughStep1: '1. 激活变电站：在气闸室视图 0，切换开关：左上，右下，中心。',
     walkthroughStep2: '2. 对齐天线：在通信室视图 0，设置频率为 142.8。',
-    walkthroughStep3: '3. 破解终端：在实验室视图 0，连接所有节点。',
-    walkthroughStep4: '4. 稳定核心：在遏制室视图 0，顺时针旋转至 360，然后逆时针旋转至 0。',
+    walkthroughStep3: '3. 校准重力：在实验室视图 1，将球体拖动到目标。',
+    walkthroughStep4: '4. 破解终端：在实验室视图 0，连接所有节点。',
+    walkthroughStep5: '5. 对齐激光：在反应堆视图 0，旋转镜子以引导光束。',
+    walkthroughStep6: '6. 平衡压力：在遏制室视图 1，将指针保持在绿色区域。',
+    walkthroughStep7: '7. 稳定核心：在遏制室视图 0，顺时针旋转至 360，然后逆时针旋转至 0。',
+    log1: '日志 01：瑞亚基地是为了研究“红物质”异常而建立的。初步测试显示它是一种自给自足的能源，但极不稳定。',
+    log2: '日志 02：沃尔科夫博士报告实验室出现奇怪的重力波动。球体在没有外力的情况下漂移。',
+    log3: '日志 03：紧急！反应堆核心过热。激光对齐系统失效。我们正在撤离。如果你发现这个，不惜一切代价稳定核心。',
+    reactor: '反应堆',
+    laserAlignment: '激光对齐',
+    alignMirrors: '旋转镜子以将光束引导至接收器',
     credits: '制作人员表',
     creditsTitle: '瑞亚事件：红物质 2',
     creditsLead: '首席开发与设计',
-    creditsLeadName: 'Kevin AI',
+    creditsLeadName: 'Crea',
     creditsLeadDesc: '负责全栈开发、UI/UX 设计、游戏逻辑及多语言支持。',
     creditsTech: '技术栈',
     creditsTechDesc: 'React 19, Tailwind CSS, Framer Motion, Lucide Icons.',
     creditsStory: '故事背景',
     creditsStoryDesc: '基于 Vertical Robot 的《Red Matter 2》宇宙。',
-    creditsPowered: 'Powered by Kevin AI',
+    creditsPowered: 'Powered by Crea',
     back: '返回',
     rotateFull: '顺时针旋转至 360°，然后逆时针旋转回 0°',
     newGame: '新游戏',
@@ -329,12 +413,13 @@ const UI_STRINGS = {
     resetConfirm: '您确定吗？这将清除所有进度。',
     musicOn: '音乐：开启',
     musicOff: '音乐：关闭',
+    originalDev: '原版VR游戏开发者',
+    fullPlaythrough: '《红色物质2》实况全程',
   }
 };
-
 // --- Sub-components ---
 
-const HUD = ({ state, toolMode, setToolMode, setLanguage, onLocationClick }: { state: GameState, toolMode: ToolMode, setToolMode: (m: ToolMode) => void, setLanguage: (l: 'EN' | 'ZH') => void, onLocationClick: () => void }) => {
+const HUD = ({ state, toolMode, setToolMode, setLanguage, onLocationClick }) => {
   const t = UI_STRINGS[state.language];
 
   return (
@@ -420,7 +505,7 @@ const HUD = ({ state, toolMode, setToolMode, setLanguage, onLocationClick }: { s
   );
 };
 
-const MessageLog = ({ messages }: { messages: { id: string, text: string }[] }) => {
+const MessageLog = ({ messages }) => {
   return (
     <div className="fixed left-8 top-1/2 -translate-y-1/2 w-64 space-y-2 pointer-events-none">
       <AnimatePresence mode="popLayout">
@@ -447,6 +532,39 @@ const MessageLog = ({ messages }: { messages: { id: string, text: string }[] }) 
 let msgCounter = 0;
 const generateMsgId = () => `msg-${Date.now()}-${msgCounter++}-${Math.random().toString(36).substr(2, 9)}`;
 
+const ExternalLinks = ({ t, className }) => {
+  return (
+    <div className={`flex flex-col gap-2 ${className}`}>
+      <div className="flex items-center gap-3 bg-white/5 border border-white/5 px-4 py-2 rounded-full hover:bg-white/10 transition-all group pointer-events-auto">
+        <span className="text-[10px] font-sans tracking-widest text-white/40 group-hover:text-white/60 transition-colors uppercase">
+          {t.originalDev}:
+        </span>
+        <a 
+          href="https://verticalrobot.com/" 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="text-[10px] font-sans tracking-widest text-cyan-400/60 hover:text-cyan-400 transition-colors underline underline-offset-4"
+        >
+          verticalrobot.com
+        </a>
+      </div>
+      <div className="flex items-center gap-3 bg-white/5 border border-white/5 px-4 py-2 rounded-full hover:bg-white/10 transition-all group pointer-events-auto">
+        <span className="text-[10px] font-sans tracking-widest text-white/40 group-hover:text-white/60 transition-colors uppercase">
+          {t.fullPlaythrough}:
+        </span>
+        <a 
+          href="https://www.bilibili.com/video/BV1bW4y157Cb/?spm_id_from=333.337.search-card.all.click" 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="text-[10px] font-sans tracking-widest text-pink-400/60 hover:text-pink-400 transition-colors underline underline-offset-4"
+        >
+          bilibili.com
+        </a>
+      </div>
+    </div>
+  );
+};
+
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [showMenu, setShowMenu] = useState(true);
@@ -456,7 +574,7 @@ export default function App() {
     return localStorage.getItem('rhea_completed') === 'true';
   });
 
-  const [state, setState] = useState<GameState>({
+  const [state, setState] = useState({
     currentRoom: 'AIRLOCK',
     currentView: 0,
     inventory: [],
@@ -467,26 +585,30 @@ export default function App() {
     coreStabilized: false,
     fusesAligned: false,
     cipherSolved: false,
+    gravityCalibrated: false,
+    pressureCalibrated: false,
+    laserAligned: false,
     scannedObjects: new Set(),
     messages: [
       { id: generateMsgId(), text: UI_STRINGS.EN.msgInit },
       { id: generateMsgId(), text: UI_STRINGS.EN.msgLanding },
       { id: generateMsgId(), text: UI_STRINGS.EN.msgWelcome }
     ],
-    language: 'EN'
+    language: 'EN',
+    foundLogs: [],
   });
 
   const t = UI_STRINGS[state.language];
 
-  const [toolMode, setToolMode] = useState<ToolMode>(ToolMode.SCANNER);
-  const [scanningId, setScanningId] = useState<string | null>(null);
-  const [activePuzzle, setActivePuzzle] = useState<string | null>(null);
+  const [toolMode, setToolMode] = useState(ToolMode.SCANNER);
+  const [scanningId, setScanningId] = useState(null);
+  const [activePuzzle, setActivePuzzle] = useState(null);
   const [showWalkthrough, setShowWalkthrough] = useState(false);
   const [showCredits, setShowCredits] = useState(false);
   const [showIntro, setShowIntro] = useState(false);
   const [locationClickCount, setLocationClickCount] = useState(0);
   const [isMusicPlaying, setIsMusicPlaying] = useState(false);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioRef = useRef(null);
 
   // --- Effects ---
   useEffect(() => {
@@ -496,7 +618,7 @@ export default function App() {
 
   useEffect(() => {
     let isMounted = true;
-    let playPromise: Promise<void> | null = null;
+    let playPromise = null;
 
     const syncAudio = async () => {
       if (isMusicPlaying) {
@@ -504,7 +626,6 @@ export default function App() {
         try {
           if (!audioRef.current) {
             console.log("Initializing new Audio object...");
-            // Using a very stable, widely accessible test URL
             audioRef.current = new Audio();
             audioRef.current.src = 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3';
             audioRef.current.loop = true;
@@ -513,7 +634,6 @@ export default function App() {
             
             audioRef.current.addEventListener('error', (e) => {
               console.error("Audio object error event:", e);
-              // If the primary fails, try a different one
               if (audioRef.current && isMounted) {
                 console.log("Attempting fallback to another stable source...");
                 audioRef.current.src = 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3';
@@ -540,13 +660,10 @@ export default function App() {
       } else {
         if (audioRef.current) {
           console.log("Music toggle: OFF. Syncing...");
-          // Wait for any pending play to finish before pausing to avoid interruptions
           if (playPromise) {
             try {
               await playPromise;
-            } catch (e) {
-              // Ignore play errors if we're pausing anyway
-            }
+            } catch (e) {}
           }
           audioRef.current.pause();
         }
@@ -560,7 +677,6 @@ export default function App() {
     };
   }, [isMusicPlaying]);
 
-  // Cleanup on unmount only
   useEffect(() => {
     return () => {
       if (audioRef.current) {
@@ -578,8 +694,26 @@ export default function App() {
   }, [state.coreStabilized]);
 
   const handleLocationClick = () => {
+    const rooms = ['AIRLOCK', 'COMMUNICATIONS', 'LABORATORY', 'CONTAINMENT', 'REACTOR'];
+    const currentIndex = rooms.indexOf(state.currentRoom);
+    const nextIndex = (currentIndex + 1) % rooms.length;
+    
+    const nextRoom = rooms[nextIndex];
+    let canProceed = true;
+    
+    if (nextRoom === 'COMMUNICATIONS' && !state.substationActive) canProceed = false;
+    if (nextRoom === 'LABORATORY' && !state.antennaAligned) canProceed = false;
+    if (nextRoom === 'CONTAINMENT' && !state.terminalUnlocked) canProceed = false;
+    if (nextRoom === 'REACTOR' && !state.coreStabilized) canProceed = false;
+
+    if (canProceed || nextRoom === 'AIRLOCK') {
+      setState(prev => ({ ...prev, currentRoom: nextRoom, currentView: 0 }));
+    } else {
+      addMessage('msgAccessDenied');
+    }
+
     const nextCount = locationClickCount + 1;
-    if (nextCount >= 3) {
+    if (nextCount >= 5) {
       setShowWalkthrough(true);
       setLocationClickCount(0);
     } else {
@@ -599,6 +733,10 @@ export default function App() {
       coreStabilized: false,
       fusesAligned: false,
       cipherSolved: false,
+      gravityCalibrated: false,
+      pressureCalibrated: false,
+      laserAligned: false,
+      foundLogs: [],
       scannedObjects: new Set(),
       messages: [
         { id: generateMsgId(), text: t.msgInit },
@@ -611,7 +749,7 @@ export default function App() {
     setShowIntro(true);
   };
 
-  const jumpToLevel = (room: GameState['currentRoom']) => {
+  const jumpToLevel = (room) => {
     setState(prev => ({
       ...prev,
       currentRoom: room,
@@ -644,6 +782,10 @@ export default function App() {
         coreStabilized: false,
         fusesAligned: false,
         cipherSolved: false,
+        gravityCalibrated: false,
+        pressureCalibrated: false,
+        laserAligned: false,
+        foundLogs: [],
         scannedObjects: new Set(),
         messages: [
           { id: generateMsgId(), text: t.msgInit },
@@ -657,9 +799,9 @@ export default function App() {
     }
   };
 
-  const addMessage = (msgKey: keyof typeof UI_STRINGS.EN | string) => {
+  const addMessage = (msgKey) => {
     setState(prev => {
-      const msgText = UI_STRINGS[prev.language][msgKey as keyof typeof UI_STRINGS.EN] || msgKey;
+      const msgText = UI_STRINGS[prev.language][msgKey] || msgKey;
       return { 
         ...prev, 
         messages: [...prev.messages, { id: generateMsgId(), text: msgText }] 
@@ -667,11 +809,11 @@ export default function App() {
     });
   };
 
-  const setLanguage = (lang: 'EN' | 'ZH') => {
+  const setLanguage = (lang) => {
     setState(prev => ({ ...prev, language: lang }));
   };
 
-  const handleScan = (obj: ScannableObject) => {
+  const handleScan = (obj) => {
     if (toolMode !== ToolMode.SCANNER) return;
     setScanningId(obj.id);
     setTimeout(() => {
@@ -686,7 +828,7 @@ export default function App() {
     }, 1500);
   };
 
-  const handleInteract = (objId: string) => {
+  const handleInteract = (objId) => {
     if (toolMode === ToolMode.CLAW) {
       if (objId === 'substation_panel' && !state.substationActive) {
         setActivePuzzle('SUBSTATION');
@@ -706,14 +848,30 @@ export default function App() {
           addMessage('Error: Signal required for terminal uplink.');
         }
       } else if (objId === 'core_stabilizer' && state.currentRoom === 'CONTAINMENT') {
-        setActivePuzzle('CORE');
+        if (state.gravityCalibrated && state.pressureCalibrated && state.laserAligned) {
+          setActivePuzzle('CORE');
+        } else {
+          addMessage('Error: Gravity, Pressure, and Laser calibration required.');
+        }
+      } else if (objId === 'laser_alignment_system' && state.currentRoom === 'REACTOR') {
+        setActivePuzzle('LASER');
+      } else if (objId.startsWith('data_log_')) {
+        const logId = objId.split('_').pop();
+        if (!state.foundLogs.includes(logId)) {
+          setState(prev => ({ ...prev, foundLogs: [...prev.foundLogs, logId] }));
+          addMessage('msgLogFound');
+        }
       } else if (objId === 'cipher_wall' || objId === 'cipher_clue') {
         setActivePuzzle('CIPHER');
+      } else if (objId === 'gravity_calibration') {
+        setActivePuzzle('GRAVITY');
+      } else if (objId === 'pressure_calibration') {
+        setActivePuzzle('PRESSURE');
       }
     }
   };
 
-  const changeView = (dir: 'LEFT' | 'RIGHT') => {
+  const changeView = (dir) => {
     setState(prev => ({
       ...prev,
       currentView: prev.currentView === 0 ? 1 : 0
@@ -722,7 +880,7 @@ export default function App() {
 
   // --- Screens ---
 
-  const LoadingScreen = (_props: { key?: React.Key }) => {
+  const LoadingScreen = () => {
     const [progress, setProgress] = useState(0);
     const [loadingText, setLoadingText] = useState(t.loading);
 
@@ -777,7 +935,7 @@ export default function App() {
     );
   };
 
-  const MainMenu = (_props: { key?: React.Key }) => {
+  const MainMenu = () => {
     return (
       <div className="fixed inset-0 z-[150] bg-black flex items-center justify-center p-10">
         <div className="atmosphere opacity-80" />
@@ -842,7 +1000,7 @@ export default function App() {
 
             <button onClick={() => setShowCredits(true)} className="group flex flex-col items-start p-6 rounded-[2rem] border border-white/5 hover:bg-white/5 transition-all text-left">
               <span className="text-xl font-light mb-1 group-hover:text-red-500 transition-colors">{t.credits}</span>
-              <span className="text-[10px] text-white/30 tracking-widest uppercase">KEVIN AI</span>
+              <span className="text-[10px] text-white/30 tracking-widest uppercase">CREA</span>
             </button>
 
             <button 
@@ -854,11 +1012,21 @@ export default function App() {
             </button>
           </motion.div>
         </div>
+
+        {/* External Links in Main Menu */}
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 1 }}
+          className="absolute bottom-10 right-10"
+        >
+          <ExternalLinks t={t} className="items-end" />
+        </motion.div>
       </div>
     );
   };
 
-  const LevelSelectModal = (_props: { key?: React.Key }) => (
+  const LevelSelectModal = () => (
     <motion.div 
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       className="fixed inset-0 z-[160] bg-black/90 backdrop-blur-3xl flex items-center justify-center p-10"
@@ -872,16 +1040,16 @@ export default function App() {
           {['AIRLOCK', 'COMMUNICATIONS', 'LABORATORY', 'CONTAINMENT'].map((room) => (
             <button 
               key={room}
-              onClick={() => jumpToLevel(room as any)}
+              onClick={() => jumpToLevel(room)}
               className="group flex items-center justify-between p-8 rounded-[2.5rem] border border-white/5 hover:bg-white/5 transition-all"
             >
-              <span className="text-2xl font-light group-hover:text-red-500 transition-colors">{t[room.toLowerCase() as keyof typeof t]}</span>
+              <span className="text-2xl font-light group-hover:text-red-500 transition-colors">{t[room.toLowerCase()]}</span>
               <ChevronRight className="w-6 h-6 text-white/20 group-hover:text-red-500" />
             </button>
           ))}
           <button 
             onClick={() => {
-              const rooms: GameState['currentRoom'][] = ['AIRLOCK', 'LABORATORY', 'CONTAINMENT'];
+              const rooms = ['AIRLOCK', 'LABORATORY', 'CONTAINMENT'];
               const randomRoom = rooms[Math.floor(Math.random() * rooms.length)];
               jumpToLevel(randomRoom);
             }}
@@ -895,7 +1063,7 @@ export default function App() {
     </motion.div>
   );
 
-  const ControlsModal = (_props: { key?: React.Key }) => (
+  const ControlsModal = () => (
     <motion.div 
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       className="fixed inset-0 z-[160] bg-black/90 backdrop-blur-3xl flex items-center justify-center p-10"
@@ -925,11 +1093,11 @@ export default function App() {
 
   // --- Puzzles ---
 
-  const SubstationPuzzle = (_props: { key?: React.Key }) => {
+  const SubstationPuzzle = () => {
     const [switches, setSwitches] = useState(Array(9).fill(false));
     const targetPattern = [0, 4, 8]; // Top-Left, Center, Bottom-Right
 
-    const handleToggle = (i: number) => {
+    const handleToggle = (i) => {
       const next = [...switches];
       next[i] = !next[i];
       setSwitches(next);
@@ -970,7 +1138,7 @@ export default function App() {
     );
   };
 
-  const AntennaPuzzle = (_props: { key?: React.Key }) => {
+  const AntennaPuzzle = () => {
     const [freq, setFreq] = useState(100.0);
     const target = 142.8;
 
@@ -1029,11 +1197,11 @@ export default function App() {
     );
   };
 
-  const CipherPuzzle = (_props: { key?: React.Key }) => {
+  const CipherPuzzle = () => {
     const [code, setCode] = useState(['', '', '', '']);
-    const target = ['1', '9', '7', '2']; // Year of Rhea discovery or something
+    const target = ['1', '9', '7', '2']; 
 
-    const handleInput = (i: number, val: string) => {
+    const handleInput = (i, val) => {
       const next = [...code];
       next[i] = val;
       setCode(next);
@@ -1073,9 +1241,9 @@ export default function App() {
     );
   };
 
-  const HackPuzzle = (_props: { key?: React.Key }) => {
+  const HackPuzzle = () => {
     const [grid, setGrid] = useState(Array(9).fill(false));
-    const handleToggle = (i: number) => {
+    const handleToggle = (i) => {
       const next = [...grid];
       next[i] = !next[i];
       setGrid(next);
@@ -1116,9 +1284,238 @@ export default function App() {
     );
   };
 
-  const CorePuzzle = (_props: { key?: React.Key }) => {
+  const GravityPuzzle = () => {
+    const [positions, setPositions] = useState([
+      { id: 1, x: 0, y: 0, targetX: 100, targetY: -100, solved: false },
+      { id: 2, x: 0, y: 0, targetX: -100, targetY: 100, solved: false },
+      { id: 3, x: 0, y: 0, targetX: 120, targetY: 120, solved: false },
+    ]);
+
+    const handleDrag = (id, info) => {
+      const next = positions.map(p => {
+        if (p.id === id) {
+          const newX = p.x + info.delta.x;
+          const newY = p.y + info.delta.y;
+          const dist = Math.sqrt(Math.pow(newX - p.targetX, 2) + Math.pow(newY - p.targetY, 2));
+          return { ...p, x: newX, y: newY, solved: dist < 20 };
+        }
+        return p;
+      });
+      setPositions(next);
+
+      if (next.every(p => p.solved)) {
+        setState(prev => ({ ...prev, gravityCalibrated: true }));
+        setActivePuzzle(null);
+        addMessage('msgGravityCalibrated');
+      }
+    };
+
+    return (
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-2xl"
+      >
+        <div className="rounded-panel p-10 w-[600px] h-[600px] border-purple-500/20 shadow-2xl flex flex-col items-center">
+          <div className="flex justify-between items-center w-full mb-10">
+            <span className="status-label text-purple-400 text-xs">{t.gravityCalibration}</span>
+            <button onClick={() => setActivePuzzle(null)} className="text-white/40 hover:text-white transition-colors">{t.close}</button>
+          </div>
+          
+          <div className="relative w-full h-full border border-white/5 rounded-3xl overflow-hidden bg-black/40">
+            {/* Target Zones */}
+            {positions.map(p => (
+              <div 
+                key={`target-${p.id}`}
+                className={`absolute w-16 h-16 rounded-full border-2 border-dashed transition-all duration-500 flex items-center justify-center ${p.solved ? 'border-purple-500 bg-purple-500/20 scale-110' : 'border-white/10'}`}
+                style={{ 
+                  left: `calc(50% + ${p.targetX}px - 32px)`, 
+                  top: `calc(50% + ${p.targetY}px - 32px)` 
+                }}
+              >
+                <div className={`w-2 h-2 rounded-full ${p.solved ? 'bg-purple-400 animate-ping' : 'bg-white/5'}`} />
+              </div>
+            ))}
+
+            {/* Draggable Spheres */}
+            {positions.map(p => (
+              <motion.div
+                key={`sphere-${p.id}`}
+                drag
+                dragMomentum={false}
+                onDrag={(_, info) => handleDrag(p.id, info)}
+                className={`absolute w-12 h-12 rounded-full cursor-grab active:cursor-grabbing flex items-center justify-center shadow-lg transition-colors ${p.solved ? 'bg-purple-500' : 'bg-white/20 hover:bg-white/30'}`}
+                style={{ 
+                  left: `calc(50% + ${p.x}px - 24px)`, 
+                  top: `calc(50% + ${p.y}px - 24px)`,
+                  zIndex: 10
+                }}
+              >
+                <Zap className={`w-6 h-6 ${p.solved ? 'text-white' : 'text-white/40'}`} />
+              </motion.div>
+            ))}
+
+            {/* Central Core Visual */}
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none">
+              <div className="w-32 h-32 rounded-full bg-purple-500/5 blur-3xl animate-pulse" />
+              <div className="w-16 h-16 rounded-full border border-purple-500/20 flex items-center justify-center">
+                <div className="w-8 h-8 rounded-full border border-purple-500/40 animate-spin" />
+              </div>
+            </div>
+          </div>
+
+          <p className="mt-8 font-sans text-[10px] text-purple-500/40 text-center uppercase tracking-widest">{t.stabilizeGravity}</p>
+        </div>
+      </motion.div>
+    );
+  };
+
+  const LaserPuzzle = () => {
+    const [mirrors, setMirrors] = useState([0, 90, 180, 270]); // Angles for 4 mirrors
+    const targetAngles = [90, 180, 270, 0]; // Solution
+
+    const rotateMirror = (idx) => {
+      const next = [...mirrors];
+      next[idx] = (next[idx] + 90) % 360;
+      setMirrors(next);
+      
+      if (next.every((val, i) => val === targetAngles[i])) {
+        setTimeout(() => {
+          setState(prev => ({ ...prev, laserAligned: true }));
+          setActivePuzzle(null);
+          addMessage('msgLaserAligned');
+        }, 1000);
+      }
+    };
+
+    return (
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-2xl"
+      >
+        <div className="rounded-panel p-10 w-[600px] border-cyan-500/20 shadow-2xl">
+          <div className="flex justify-between items-center mb-10">
+            <span className="status-label text-cyan-400 text-xs">{t.laserAlignment}</span>
+            <button onClick={() => setActivePuzzle(null)} className="text-white/40 hover:text-white transition-colors">{t.close}</button>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-8 place-items-center relative">
+            {/* Laser Source */}
+            <div className="absolute -left-12 top-1/2 -translate-y-1/2 w-8 h-8 bg-red-500 rounded-full shadow-[0_0_20px_red]" />
+            
+            {mirrors.map((angle, i) => (
+              <motion.button
+                key={i}
+                onClick={() => rotateMirror(i)}
+                animate={{ rotate: angle }}
+                className={`w-24 h-24 border-2 flex items-center justify-center rounded-xl transition-colors ${mirrors[i] === targetAngles[i] ? 'border-cyan-500 bg-cyan-500/10' : 'border-white/10 hover:border-white/30'}`}
+              >
+                <div className="w-1 h-20 bg-white/40 rounded-full rotate-45" />
+              </motion.button>
+            ))}
+
+            {/* Receiver */}
+            <div className="absolute -right-12 top-1/2 -translate-y-1/2 w-12 h-12 border-2 border-dashed border-cyan-500/50 rounded-xl flex items-center justify-center">
+              <div className={`w-6 h-6 rounded-full transition-colors ${state.laserAligned ? 'bg-cyan-500 shadow-[0_0_20px_cyan]' : 'bg-white/5'}`} />
+            </div>
+          </div>
+          
+          <p className="mt-12 font-sans text-[10px] text-cyan-500/40 text-center uppercase tracking-widest">{t.alignMirrors}</p>
+        </div>
+      </motion.div>
+    );
+  };
+
+  const PressurePuzzle = () => {
+    const [value, setValue] = useState(50);
+    const [progress, setProgress] = useState(0);
+    const targetRange = [45, 55];
+
+    useEffect(() => {
+      const interval = setInterval(() => {
+        if (value >= targetRange[0] && value <= targetRange[1]) {
+          setProgress(p => {
+            if (p >= 100) {
+              clearInterval(interval);
+              setState(prev => ({ ...prev, pressureCalibrated: true }));
+              setActivePuzzle(null);
+              addMessage('msgPressureBalanced');
+              return 100;
+            }
+            return p + 2;
+          });
+        } else {
+          setProgress(p => Math.max(0, p - 5));
+        }
+      }, 100);
+
+      return () => clearInterval(interval);
+    }, [value]);
+
+    return (
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-2xl"
+      >
+        <div className="rounded-panel p-10 w-[500px] border-orange-500/20 shadow-2xl">
+          <div className="flex justify-between items-center mb-10">
+            <span className="status-label text-orange-400 text-xs">{t.pressureBalance}</span>
+            <button onClick={() => setActivePuzzle(null)} className="text-white/40 hover:text-white transition-colors">{t.close}</button>
+          </div>
+          
+          <div className="flex flex-col items-center gap-12">
+            <div className="relative w-full h-24 bg-black/40 rounded-2xl border border-white/5 overflow-hidden flex items-center px-4">
+              {/* Green Zone */}
+              <div 
+                className="absolute h-full bg-emerald-500/20 border-x border-emerald-500/40"
+                style={{ left: '45%', width: '10%' }}
+              />
+              
+              {/* Pointer */}
+              <motion.div 
+                className="absolute w-1 h-16 bg-orange-500 shadow-[0_0_10px_rgba(249,115,22,0.5)] z-10"
+                animate={{ left: `${value}%` }}
+                transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+              />
+
+              {/* Jitter Simulation */}
+              <motion.div 
+                className="absolute inset-0 pointer-events-none"
+                animate={{ x: [0, 2, -2, 0] }}
+                transition={{ duration: 0.1, repeat: Infinity }}
+              />
+            </div>
+
+            <div className="w-full space-y-4">
+              <input 
+                type="range" 
+                min="0" 
+                max="100" 
+                step="0.1"
+                value={value} 
+                onChange={(e) => setValue(parseFloat(e.target.value))}
+                className="w-full accent-orange-500"
+              />
+              <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden">
+                <motion.div 
+                  className="h-full bg-emerald-500"
+                  animate={{ width: `${progress}%` }}
+                />
+              </div>
+            </div>
+            
+            <p className="font-sans text-[10px] text-orange-500/40 text-center uppercase tracking-widest">{t.balanceLoad}</p>
+          </div>
+        </div>
+      </motion.div>
+    );
+  };
+
+  const CorePuzzle = () => {
     const [rotation, setRotation] = useState(0);
-    const [phase, setPhase] = useState<'CW' | 'CCW'>('CW');
+    const [phase, setPhase] = useState('CW');
     const [cwDone, setCwDone] = useState(false);
     const [ccwDone, setCcwDone] = useState(false);
 
@@ -1188,7 +1585,7 @@ export default function App() {
     );
   };
 
-  const WalkthroughModal = (_props: { key?: React.Key }) => (
+  const WalkthroughModal = () => (
     <motion.div 
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
@@ -1210,6 +1607,9 @@ export default function App() {
           <p className="border-l-2 border-cyan-500/50 pl-6 py-2 bg-cyan-500/5 rounded-r-2xl">{t.walkthroughStep2}</p>
           <p className="border-l-2 border-cyan-500/50 pl-6 py-2 bg-cyan-500/5 rounded-r-2xl">{t.walkthroughStep3}</p>
           <p className="border-l-2 border-cyan-500/50 pl-6 py-2 bg-cyan-500/5 rounded-r-2xl">{t.walkthroughStep4}</p>
+          <p className="border-l-2 border-cyan-500/50 pl-6 py-2 bg-cyan-500/5 rounded-r-2xl">{t.walkthroughStep5}</p>
+          <p className="border-l-2 border-cyan-500/50 pl-6 py-2 bg-cyan-500/5 rounded-r-2xl">{t.walkthroughStep6}</p>
+          <p className="border-l-2 border-cyan-500/50 pl-6 py-2 bg-cyan-500/5 rounded-r-2xl">{t.walkthroughStep7}</p>
         </div>
         <button 
           onClick={() => setShowWalkthrough(false)}
@@ -1221,7 +1621,7 @@ export default function App() {
     </motion.div>
   );
 
-  const CreditsScreen = ({ onClose, t }: { onClose: () => void, t: any, key?: React.Key }) => (
+  const CreditsScreen = ({ onClose, t }) => (
     <motion.div 
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
@@ -1288,7 +1688,7 @@ export default function App() {
     </motion.div>
   );
 
-  const MissionAccomplished = ({ state, t, onRestart, onShowCredits }: { state: GameState, t: any, onRestart: () => void, onShowCredits: () => void, key?: React.Key }) => (
+  const MissionAccomplished = ({ state, t, onRestart, onShowCredits }) => (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
@@ -1325,7 +1725,7 @@ export default function App() {
     </motion.div>
   );
 
-  const IntroSequence = ({ onComplete }: { onComplete: () => void, key?: React.Key }) => {
+  const IntroSequence = ({ onComplete }) => {
     const [step, setStep] = useState(0);
     const introTexts = state.language === 'ZH' ? [
       "2072年。土卫五 (Rhea)。",
@@ -1350,6 +1750,7 @@ export default function App() {
         return () => clearTimeout(timer);
       }
     }, [step]);
+
 
     return (
       <div className="fixed inset-0 z-[300] bg-black flex items-center justify-center p-10 overflow-hidden">
@@ -1379,6 +1780,33 @@ export default function App() {
               <span className="status-label text-red-500 animate-pulse">INITIALIZING MISSION...</span>
             </motion.div>
           )}
+        </AnimatePresence>
+      </div>
+    );
+  };
+
+  const DataLogViewer = ({ t }) => {
+    return (
+      <div className="fixed left-8 bottom-32 flex flex-col gap-3 z-[40] pointer-events-none">
+        <AnimatePresence>
+          {state.foundLogs.map(logId => (
+            <motion.div
+              key={logId}
+              initial={{ opacity: 0, x: -50 }}
+              animate={{ opacity: 1, x: 0 }}
+              className="bg-black/40 backdrop-blur-md border border-white/5 p-4 rounded-2xl w-80 pointer-events-auto"
+            >
+              <div className="flex items-center gap-3 mb-2">
+                <Info className="w-4 h-4 text-cyan-500" />
+                <span className="status-label text-[9px] text-cyan-500/60 uppercase tracking-widest">
+                  {t[`log${logId}`]?.split(':')[0]}
+                </span>
+              </div>
+              <p className="font-sans text-[11px] text-white/70 leading-relaxed italic">
+                {t[`log${logId}`]?.split(':')[1]}
+              </p>
+            </motion.div>
+          ))}
         </AnimatePresence>
       </div>
     );
@@ -1453,6 +1881,13 @@ export default function App() {
             >
               <ChevronRight className="w-10 h-10" />
             </button>
+            <button 
+              onClick={() => changeRoom()}
+              className="absolute bottom-10 left-1/2 -translate-x-1/2 p-6 bg-black/20 hover:bg-black/40 border border-white/5 rounded-full text-white/40 hover:text-white transition-all z-40 pointer-events-auto flex items-center gap-4"
+            >
+              <ChevronRight className="w-10 h-10 -rotate-90" />
+              <span className="status-label text-[10px] tracking-[0.3em]">{t.changeRoom}</span>
+            </button>
 
             {/* Scannable / Interactable Objects */}
             {SCANNABLE_OBJECTS[state.currentRoom][state.currentView].map(obj => (
@@ -1486,14 +1921,14 @@ export default function App() {
                     </svg>
                   )}
                 </button>
-
+ 
                 {/* Object Label */}
                 <div className="absolute top-full mt-6 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-all duration-500 translate-y-2 group-hover:translate-y-0 pointer-events-none">
                   <div className="bg-black/80 border border-white/10 px-6 py-3 rounded-full backdrop-blur-xl whitespace-nowrap shadow-2xl">
                     <span className="status-label text-[10px] tracking-widest">{state.language === 'ZH' ? obj.nameZh : obj.name}</span>
                   </div>
                 </div>
-
+ 
                 {/* Scanned Info Overlay */}
                 {state.scannedObjects.has(obj.id) && (
                   <motion.div 
@@ -1518,7 +1953,7 @@ export default function App() {
                 )}
               </div>
             ))}
-
+ 
             {/* Red Matter Core Visual (Only in Containment View 0) */}
             {state.currentRoom === 'CONTAINMENT' && state.currentView === 0 && (
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none">
@@ -1529,7 +1964,7 @@ export default function App() {
           </motion.div>
         </AnimatePresence>
       </div>
-
+ 
       {/* UI Layers */}
       <HUD 
         state={state} 
@@ -1539,6 +1974,7 @@ export default function App() {
         onLocationClick={handleLocationClick} 
       />
       <MessageLog messages={state.messages} />
+      <DataLogViewer t={t} />
       
       {/* Overlays & Modals */}
       <AnimatePresence>
@@ -1552,6 +1988,9 @@ export default function App() {
         {activePuzzle === 'HACK' && <HackPuzzle key="puzzle-hack" />}
         {activePuzzle === 'CORE' && <CorePuzzle key="puzzle-core" />}
         {activePuzzle === 'CIPHER' && <CipherPuzzle key="puzzle-cipher" />}
+        {activePuzzle === 'GRAVITY' && <GravityPuzzle key="puzzle-gravity" />}
+        {activePuzzle === 'PRESSURE' && <PressurePuzzle key="puzzle-pressure" />}
+        {activePuzzle === 'LASER' && <LaserPuzzle key="puzzle-laser" />}
         {showWalkthrough && <WalkthroughModal key="walkthrough-modal" />}
         {showCredits && (
           <CreditsScreen 
@@ -1576,3 +2015,4 @@ export default function App() {
     </div>
   );
 }
+
